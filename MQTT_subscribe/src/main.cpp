@@ -1,7 +1,7 @@
-#include <WiFi.h>
-#include <string.h>
-#include <PubSubClient.h>
 #include <Arduino.h>
+#include <WiFi.h>
+#include <PubSubClient.h>
+#include <string.h>
 
 #define WIFI_SSID                 	"Tanvir Ahmed"
 #define WIFI_PASS                 	"Volvo Polestar2"
@@ -10,8 +10,27 @@
 #define CLIENT_ID					"tanvir1"
 #define TOPIC 						"Tanvir/IoT/Pub"
 
+int led_status = 1;
+
+
 WiFiClient espClient;
 PubSubClient client(espClient);
+
+void ledStatus(char *status)
+{
+	Serial.print("Status: ");
+	Serial.println(status);
+	Serial.print(strcmp(status, "on"));
+	if (strcmp(status, "on") == 0)
+	{
+		led_status = 1;
+	}
+	if (strcmp(status, "off") == 0)
+	{
+		led_status = 0;
+	}
+	digitalWrite(BUILTIN_LED, led_status);
+}
 
 void reconnect()
 {
@@ -22,6 +41,7 @@ void reconnect()
 		if (client.connect(CLIENT_ID))
 		{
 			Serial.println("Connected to MQTT broker");
+			client.subscribe(TOPIC);
 		}
 		else
 		{
@@ -38,17 +58,30 @@ void callback(char *topic, byte *payload, unsigned int length)
 	Serial.print("Message received on topic: ");
 	Serial.println(topic);
 
-	Serial.print("Payload: ");
+	Serial.print("Payload (data received from the topic): ");
+	char str_payload[20] = "";
 	for (int i = 0; i < length; i++)
 	{
 		Serial.print((char)payload[i]);
+		str_payload[i] = (char)payload[i];
 	}
+	// for (int i = 0; i < 20; i++)
+	// {
+	// 	Serial.print(i);
+	// 	Serial.print(" ");
+	// 	Serial.println(str_payload[i]);
+	// }
+	str_payload[length] = '\0';
+	ledStatus(str_payload);
 	Serial.println();
 }
 
 void setup()
 {
 	Serial.begin(115200);
+
+	pinMode(LED_BUILTIN, OUTPUT);
+
 	WiFi.begin(WIFI_SSID, WIFI_PASS);
 	while (WiFi.status() != WL_CONNECTED)
 	{
@@ -56,27 +89,17 @@ void setup()
 		Serial.println("Connecting to WiFi...");
 	}
 	Serial.println("Connected to WiFi");
-	client.setServer(BROKER, PORT);
-}
 
-int data_count = 0;
+	client.setServer(BROKER, PORT);
+	client.setCallback(callback);
+	client.subscribe(TOPIC);
+}
 
 void loop()
 {
-	data_count++;
 	if (!client.connected())
 	{
 		reconnect();
 	}
-	
-
-	char result[10]; 
-    sprintf(result, "%d", data_count);
-	char payload[] = "Hi, ";
-	strcat(payload, result);
-
-
-	client.publish(TOPIC, payload);
-	Serial.print("Sent the data.");
-	delay(5000);
+	client.loop();
 }
